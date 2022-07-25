@@ -1,0 +1,85 @@
+Parameters:
+  nameOfService:
+    Description: "The name of the instance"
+    Type: String
+  
+  InstanceType:
+    Description: "The instance type"
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+    Type: String
+  
+  KeyPair:
+    Description: "The key pair"
+    Type: AWS::EC2::KeyPair::KeyName
+
+Resources: 
+  CoffeeShopInstance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            apt:
+              apache2: []
+              unzip: []
+          services:
+            sysvinit:
+              apache2:
+                enabled: true
+                ensureRunning: true
+          commands:
+            test:
+              command: "wget https://www.tooplate.com/zip-templates/2126_antique_cafe.zip && unzip 2126_antique_cafe.zip && cp -r 2126_antique_cafe/* /var/www/html/"
+            
+
+    Properties: 
+      ImageId: ami-04ff9e9b51c1f62ca
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPair
+      Tags:
+        - Key: Name
+          Value: !Ref nameOfService
+      SecurityGroups:
+        - !Ref MySecurityGroup
+      UserData:
+        "Fn::Base64": 
+          !Sub |
+            #!bin/bash
+            sudo apt update -y
+            mkdir -p /opt/aws/bin
+            wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+            python3 -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-py3-latest.tar.gz
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource CoffeeShopInstance --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource CoffeeShopInstance --region ${AWS::Region}
+    
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT5M
+      
+        
+  
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join [" ", ["My security group from", !Ref "AWS::StackName"]]
+      GroupDescription: !Join [" ", ["My security group from", !Ref "AWS::StackName"]]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+Outputs:
+  PublicIp: 
+    Value: !GetAtt [CoffeeShopInstance, PublicIp]
+  PublicDnsName:
+    Value: !GetAtt [CoffeeShopInstance, PublicDnsName]
